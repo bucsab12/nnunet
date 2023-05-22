@@ -183,13 +183,9 @@ def save_softmax_original_size(out_file_name, softmax_arr, bbox_dict=None, case_
         softmax_arr_new = prepare_image(data=np.transpose(softmax_arr),
                                         new_shape=np.array((160, 192, 160)),
                                         patient_name=patient_name, bbox_dict=bbox_dict)
-        # softmax_arr_new = prepare_image(data=np.flipud(np.transpose(softmax_arr)),
-        #                                 new_shape=np.array((160, 192, 160)),
-        #                                 patient_name=patient_name, bbox_dict=bbox_dict)
     npz_file_name = os.path.basename(out_file_name).split('.')[0]
     resized_file_name = f'{npz_file_name}_resized.npz'
     resized_npz_path = os.path.join(os.path.dirname(out_file_name), resized_file_name)
-    # softmax_arr_new = np.transpose(softmax_arr_new)
     np.savez_compressed(resized_npz_path, a=softmax_arr_new)
 
 
