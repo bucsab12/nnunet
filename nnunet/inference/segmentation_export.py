@@ -16,9 +16,11 @@
 import sys
 from copy import deepcopy
 from typing import Union, Tuple
+from os.path import basename
 
 import numpy as np
 import SimpleITK as sitk
+from Network.unet3d.utils.utils import prepare_image
 from batchgenerators.augmentations.utils import resize_segmentation
 from nnunet.preprocessing.preprocessing import get_lowres_axis, get_do_separate_z, resample_data_or_seg
 from batchgenerators.utilities.file_and_folder_operations import *
@@ -30,7 +32,8 @@ def save_segmentation_nifti_from_softmax(segmentation_softmax: Union[str, np.nda
                                          seg_postprogess_fn: callable = None, seg_postprocess_args: tuple = None,
                                          resampled_npz_fname: str = None,
                                          non_postprocessed_fname: str = None, force_separate_z: bool = None,
-                                         interpolation_order_z: int = 0, verbose: bool = True):
+                                         interpolation_order_z: int = 0, verbose: bool = True, bbox_dict: dict = True,
+                                         case_index_dict: dict = None):
     """
     This is a utility for writing segmentations to nifty and npz. It requires the data to have been preprocessed by
     GenericPreprocessor because it depends on the property dictionary output (dct) to know the geometry of the original
@@ -113,12 +116,13 @@ def save_segmentation_nifti_from_softmax(segmentation_softmax: Union[str, np.nda
         seg_old_spacing = segmentation_softmax
 
     if resampled_npz_fname is not None:
-        np.savez_compressed(resampled_npz_fname, softmax=seg_old_spacing.astype(np.float16))
+        # np.savez_compressed(resampled_npz_fname, softmax=seg_old_spacing.astype(np.float16))  # TODO YUVAL COMMENTED TO PREVENT UNNECESSARY FILE BEING SAVED
         # this is needed for ensembling if the nonlinearity is sigmoid
         if region_class_order is not None:
             properties_dict['regions_class_order'] = region_class_order
         save_pickle(properties_dict, resampled_npz_fname[:-4] + ".pkl")
 
+    seg_softmax_final = deepcopy(seg_old_spacing[1, ::])
     if region_class_order is None:
         seg_old_spacing = seg_old_spacing.argmax(0)
     else:
@@ -131,11 +135,16 @@ def save_segmentation_nifti_from_softmax(segmentation_softmax: Union[str, np.nda
 
     if bbox is not None:
         seg_old_size = np.zeros(shape_original_before_cropping, dtype=np.uint8)
+        softmax_old_size = np.zeros(shape_original_before_cropping)
         for c in range(3):
             bbox[c][1] = np.min((bbox[c][0] + seg_old_spacing.shape[c], shape_original_before_cropping[c]))
-        seg_old_size[bbox[0][0]:bbox[0][1],
-        bbox[1][0]:bbox[1][1],
-        bbox[2][0]:bbox[2][1]] = seg_old_spacing
+        seg_old_size[bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1], bbox[2][0]:bbox[2][1]] = seg_old_spacing
+        softmax_old_size[bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1], bbox[2][0]:bbox[2][1]] = seg_softmax_final
+        # TODO NEW CODE
+        save_softmax_original_size(out_file_name=out_fname, softmax_arr=softmax_old_size, bbox_dict=bbox_dict,
+                                   case_index_dict=case_index_dict)
+        # TODO OLD CODE NO TRIMMING OF BBOX
+        # save_softmax_original_size(out_file_name=out_fname, softmax_arr=softmax_old_size)
     else:
         seg_old_size = seg_old_spacing
 
@@ -150,15 +159,42 @@ def save_segmentation_nifti_from_softmax(segmentation_softmax: Union[str, np.nda
     seg_resized_itk.SetDirection(properties_dict['itk_direction'])
     sitk.WriteImage(seg_resized_itk, out_fname)
 
-    if (non_postprocessed_fname is not None) and (seg_postprogess_fn is not None):
-        seg_resized_itk = sitk.GetImageFromArray(seg_old_size.astype(np.uint8))
-        seg_resized_itk.SetSpacing(properties_dict['itk_spacing'])
-        seg_resized_itk.SetOrigin(properties_dict['itk_origin'])
-        seg_resized_itk.SetDirection(properties_dict['itk_direction'])
-        sitk.WriteImage(seg_resized_itk, non_postprocessed_fname)
+    # TODO YUVAL COMMENTED SO WOULD NOT SAVE LOGITS MAP TWICE
+    # if (non_postprocessed_fname is not None) and (seg_postprogess_fn is not None):
+    #     seg_resized_itk = sitk.GetImageFromArray(seg_old_size.astype(np.uint8))
+    #     seg_resized_itk.SetSpacing(properties_dict['itk_spacing'])
+    #     seg_resized_itk.SetOrigin(properties_dict['itk_origin'])
+    #     seg_resized_itk.SetDirection(properties_dict['itk_direction'])
+    #     sitk.WriteImage(seg_resized_itk, non_postprocessed_fname)
 
 
-def save_segmentation_nifti(segmentation, out_fname, dct, order=1, force_separate_z=None, order_z=0, verbose: bool = False):
+def save_softmax_original_size(out_file_name, softmax_arr, bbox_dict=None, case_index_dict=None, trim_softmax=True):
+    """
+    A function for saving the softmax probabilities array into a compressed numpy array file with the original input
+    image dimensions
+    :param out_file_name: output file path of compressed nifti array
+    :param softmax_arr: Softmax array with the original image size
+    """
+    softmax_arr_new = np.copy(softmax_arr)
+    if trim_softmax and bbox_dict is not None and case_index_dict is not None:
+        case_name_list = basename(out_file_name).split('.')[0].split('_')
+        file_index = int(case_name_list[-1])
+        patient_name = case_index_dict[file_index]
+        softmax_arr_new = prepare_image(data=np.transpose(softmax_arr),
+                                        new_shape=np.array((160, 192, 160)),
+                                        patient_name=patient_name, bbox_dict=bbox_dict)
+        # softmax_arr_new = prepare_image(data=np.flipud(np.transpose(softmax_arr)),
+        #                                 new_shape=np.array((160, 192, 160)),
+        #                                 patient_name=patient_name, bbox_dict=bbox_dict)
+    npz_file_name = os.path.basename(out_file_name).split('.')[0]
+    resized_file_name = f'{npz_file_name}_resized.npz'
+    resized_npz_path = os.path.join(os.path.dirname(out_file_name), resized_file_name)
+    # softmax_arr_new = np.transpose(softmax_arr_new)
+    np.savez_compressed(resized_npz_path, a=softmax_arr_new)
+
+
+def save_segmentation_nifti(segmentation, out_fname, dct, order=1, force_separate_z=None, order_z=0,
+                            verbose: bool = False):
     """
     faster and uses less ram than save_segmentation_nifti_from_softmax, but maybe less precise and also does not support
     softmax export (which is needed for ensembling). So it's a niche function that may be useful in some cases.

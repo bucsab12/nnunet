@@ -137,7 +137,7 @@ def preprocess_multithreaded(trainer, list_of_lists, output_files, num_processes
 def predict_cases(model, list_of_lists, output_filenames, folds, save_npz, num_threads_preprocessing,
                   num_threads_nifti_save, segs_from_prev_stage=None, do_tta=True, mixed_precision=True, overwrite_existing=False,
                   all_in_gpu=False, step_size=0.5, checkpoint_name="model_final_checkpoint",
-                  segmentation_export_kwargs: dict = None):
+                  segmentation_export_kwargs: dict = None, bbox_dict: dict = None, case_index_dict: dict = None):
     """
     :param segmentation_export_kwargs:
     :param model: folder where the model is saved, must contain fold_x subfolders
@@ -186,7 +186,8 @@ def predict_cases(model, list_of_lists, output_filenames, folds, save_npz, num_t
     torch.cuda.empty_cache()
 
     print("loading parameters for folds,", folds)
-    trainer, params = load_model_and_checkpoint_files(model, folds, mixed_precision=mixed_precision, checkpoint_name=checkpoint_name)
+    trainer, params = load_model_and_checkpoint_files(model, folds, mixed_precision=mixed_precision,
+                                                      checkpoint_name=checkpoint_name)
 
     if segmentation_export_kwargs is None:
         if 'segmentation_export_params' in trainer.plans.keys():
@@ -258,11 +259,18 @@ def predict_cases(model, list_of_lists, output_filenames, folds, save_npz, num_t
             np.save(output_filename[:-7] + ".npy", softmax_mean)
             softmax_mean = output_filename[:-7] + ".npy"
 
+        # TODO YUVAL NEW CODE NOT WORKING AT THE MOMENT WITH THE TWO EXTRA VARIABLES SO REMOVED
         results.append(pool.starmap_async(save_segmentation_nifti_from_softmax,
                                           ((softmax_mean, output_filename, dct, interpolation_order, region_class_order,
-                                            None, None,
-                                            npz_file, None, force_separate_z, interpolation_order_z),)
+                                            None, None, npz_file, None, force_separate_z, interpolation_order_z, True,
+                                            bbox_dict, case_index_dict),)
                                           ))
+
+        # TODO OLD CODE
+        # results.append(pool.starmap_async(save_segmentation_nifti_from_softmax,
+        #                                   ((softmax_mean, output_filename, dct, interpolation_order, region_class_order,
+        #                                     None, None, npz_file, None, force_separate_z, interpolation_order_z, True),)
+        #                                   ))
 
     print("inference done. Now waiting for the segmentation export to finish...")
     _ = [i.get() for i in results]
@@ -581,12 +589,12 @@ def check_input_folder_and_return_caseIDs(input_folder, expected_num_modalities)
 
 
 def predict_from_folder(model: str, input_folder: str, output_folder: str, folds: Union[Tuple[int], List[int]],
-                        save_npz: bool, num_threads_preprocessing: int, num_threads_nifti_save: int,
-                        lowres_segmentations: Union[str, None],
-                        part_id: int, num_parts: int, tta: bool, mixed_precision: bool = True,
+                        save_npz: bool, num_threads_preprocessing: int = 6, num_threads_nifti_save: int = 2,
+                        lowres_segmentations: Union[str, None] = None,
+                        part_id: int = 0, num_parts: int = 1, tta: bool = 1, mixed_precision: bool = True,
                         overwrite_existing: bool = True, mode: str = 'normal', overwrite_all_in_gpu: bool = None,
                         step_size: float = 0.5, checkpoint_name: str = "model_final_checkpoint",
-                        segmentation_export_kwargs: dict = None):
+                        segmentation_export_kwargs: dict = None, bbox_dict: dict = None, case_index_dict: dict = None):
     """
         here we use the standard naming scheme to generate list_of_lists and output_files needed by predict_cases
 
@@ -638,7 +646,8 @@ def predict_from_folder(model: str, input_folder: str, output_folder: str, folds
                              save_npz, num_threads_preprocessing, num_threads_nifti_save, lowres_segmentations, tta,
                              mixed_precision=mixed_precision, overwrite_existing=overwrite_existing, all_in_gpu=all_in_gpu,
                              step_size=step_size, checkpoint_name=checkpoint_name,
-                             segmentation_export_kwargs=segmentation_export_kwargs)
+                             segmentation_export_kwargs=segmentation_export_kwargs, bbox_dict=bbox_dict,
+                             case_index_dict=case_index_dict)
     elif mode == "fast":
         if overwrite_all_in_gpu is None:
             all_in_gpu = True
@@ -805,5 +814,6 @@ if __name__ == "__main__":
         all_in_gpu = False
 
     predict_from_folder(model, input_folder, output_folder, folds, save_npz, num_threads_preprocessing,
-                        num_threads_nifti_save, lowres_segmentations, part_id, num_parts, tta, mixed_precision=not args.disable_mixed_precision,
-                        overwrite_existing=overwrite, mode=mode, overwrite_all_in_gpu=all_in_gpu, step_size=step_size)
+                        num_threads_nifti_save, lowres_segmentations, part_id, num_parts, tta,
+                        mixed_precision=not args.disable_mixed_precision, overwrite_existing=overwrite, mode=mode,
+                        overwrite_all_in_gpu=all_in_gpu, step_size=step_size)
