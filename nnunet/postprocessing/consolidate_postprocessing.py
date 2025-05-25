@@ -86,12 +86,19 @@ def consolidate_folds(output_folder_base, validation_folder_name: str = 'validat
 
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument("-f", type=str, required=True, help="experiment output folder (fold_0, fold_1, "
-                                                               "etc must be subfolders of the given folder)")
+    # argparser = argparse.ArgumentParser()
+    # argparser.add_argument("-f", type=str, required=True, help="experiment output folder (fold_0, fold_1, "
+    #                                                            "etc must be subfolders of the given folder)")
+    #
+    # args = argparser.parse_args()
+    #
+    # folder = args.f
 
-    args = argparser.parse_args()
-
-    folder = args.f
-
-    consolidate_folds(folder)
+    results_base_folder = r'D:\users\Yuval\test\nnUNet\nnunet\nnUNet_trained_models\nnUNet\3d_fullres'
+    # folder_names_list = ['Task008_ICHILOV_CORE', 'Task009_ICHILOV_EDEMA', 'Task010_ICHILOV_ENHANCED',
+    #                      'Task011_ICHILOV_NECROTIC', 'Task012_ICHILOV_WHOLE']
+    folder_names_list = ['Task013_BRATS_2019_NNUNET_BASELINE', 'Task015_BRATS_2019_NNUNET_EDEMA', 'Task016_BRATS_2019_NNUNET_ENHANCED',
+                         'Task017_BRATS_2019_NNUNET_NECROTIC']
+    for folder_name in folder_names_list:
+        final_folder_path = join(results_base_folder, folder_name, 'nnUNetTrainerV2__nnUNetPlansv2.1')
+        consolidate_folds(final_folder_path)

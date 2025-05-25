@@ -26,7 +26,7 @@ class RunAllModesTrainPredict:
         self.trainer_name = '3d_fullres nnUNetTrainerV2'
         self.task_number_range = task_number_range  # range(14, 16)
         self.fold_range = [0]
-        self.predict_fold = predict_fold
+        self.predict_fold = "CV" if predict_fold is None else predict_fold
         self.task_list = []
 
     def create_predict_run_command(self, task_name, input_data_folder_name, output_data_folder_name):
@@ -57,20 +57,28 @@ class RunAllModesTrainPredict:
 
     def run_all_predictions(self, data_folder: str = 'imagesTs'):
         self.task_list = [self.get_task_name(task_num) for task_num in self.task_number_range]
+        if self.predict_fold.lower() == "cv":
+            predict_folder_name = f'Results_{self.predict_fold}'
+        else:
+            predict_folder_name = f'Results_fold_{self.predict_fold}'
         for task_name in self.task_list:
             run_command_list = self.create_predict_run_command(
                 task_name=task_name, input_data_folder_name=data_folder,
-                output_data_folder_name=join(data_folder, f'Results_fold_{self.predict_fold}'))
+                output_data_folder_name=join(data_folder, predict_folder_name))
             process = subprocess.Popen(run_command_list)
             process.wait()
             print(f'Finished running prediction for task: {task_name}')
 
     def run_all_predictions_parallel(self, data_folder: str = 'imagesTs'):
         self.task_list = [self.get_task_name(task_num) for task_num in self.task_number_range]
+        if self.predict_fold.lower() == "cv":
+            predict_folder_name = f'Results_{self.predict_fold}'
+        else:
+            predict_folder_name = f'Results_fold_{self.predict_fold}'
         for task_name in self.task_list:
             run_command_list = self.create_predict_run_command(
                 task_name=task_name, input_data_folder_name=data_folder,
-                output_data_folder_name=join(data_folder, f'Results_fold_{self.predict_fold}'))
+                output_data_folder_name=join(data_folder, predict_folder_name))
             process = subprocess.Popen(run_command_list)
             return process
 
@@ -99,18 +107,21 @@ def chunks(lst, n):
 
 
 folds_bool = True
-task_number_range_list = range(1, 2)  # range(8, 14)
-cuda_device_num_list = range(3)
+cross_validation = True
+run_mode = "Train"  # Train / Test
+data_folder = "imagesTr" if run_mode.lower() == "train" else "imagesTs"
+task_number_range_list = [15, 16, 17]  # range(8, 14)
+cuda_device_num_list = range(0, 3)
 child_processes_list = list()
 task_groups = list(chunks(task_number_range_list, 3))
-if folds_bool:
+if folds_bool and not cross_validation:
     for fold in range(0, 5):
         for task_group in task_groups:
             for task_num_range, cuda_dev_num in zip(task_group, cuda_device_num_list):
                 predict_cls = RunAllModesTrainPredict(predict_fold=fold,
                                                       task_number_range=range(task_num_range, task_num_range + 1),
                                                       cuda_device_num=cuda_dev_num)
-                child_process = predict_cls.run_all_predictions_parallel(data_folder=join('imagesTr'))
+                child_process = predict_cls.run_all_predictions_parallel(data_folder=data_folder)
                 # child_process = predict_cls.run_all_predictions_parallel(data_folder=join('brats_processing_test'))
                 child_processes_list.append(child_process)
                 # predict_cls.run_all_preprocessing()
@@ -120,9 +131,11 @@ if folds_bool:
 else:
     for task_group in task_groups:
         for task_num_range, cuda_dev_num in zip(task_group, cuda_device_num_list):
-            predict_cls = RunAllModesTrainPredict(task_number_range=range(task_num_range, task_num_range + 1),
-                                                  cuda_device_num=cuda_dev_num)
-            child_process = predict_cls.run_all_predictions_parallel(data_folder=join('imagesTs'))
+            predict_cls = RunAllModesTrainPredict(
+                task_number_range=range(task_num_range, task_num_range + 1),
+                cuda_device_num=cuda_dev_num
+            )
+            child_process = predict_cls.run_all_predictions_parallel(data_folder=data_folder)
             # child_process = predict_cls.run_all_predictions_parallel(data_folder=join('brats_train_data', f'CV'))
             # child_process = predict_cls.run_all_predictions_parallel(data_folder=join('brats_processing_test'))
             child_processes_list.append(child_process)

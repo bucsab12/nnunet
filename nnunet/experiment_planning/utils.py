@@ -37,7 +37,7 @@ def split_4d(input_folder, num_processes=default_num_threads, overwrite_task_out
     while input_folder.endswith("/"):
         input_folder = input_folder[:-1]
 
-    full_task_name = input_folder.split("/")[-1]
+    full_task_name = input_folder.split(os.path.sep)[-1]
 
     assert full_task_name.startswith("Task"), "The input folder must point to a folder that starts with TaskXX_"
 
@@ -90,9 +90,9 @@ def create_lists_from_splitted_dataset(base_folder_splitted):
     for tr in training_files:
         cur_pat = []
         for mod in range(num_modalities):
-            cur_pat.append(join(base_folder_splitted, "imagesTr", tr['image'].split("/")[-1][:-7] +
+            cur_pat.append(join(base_folder_splitted, "imagesTr", tr['image'].split(os.path.sep)[-1][:-7] +
                                 "_%04.0d.nii.gz" % mod))
-        cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1]))
+        cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split(os.path.sep)[-1]))
         lists.append(cur_pat)
     return lists, {int(i): d['modality'][str(i)] for i in d['modality'].keys()}
 
@@ -171,9 +171,9 @@ def plan_and_preprocess(task_string, processes_lowres=default_num_threads, proce
         # if there is more than one my_data_identifier (different brnaches) then this code will run for all of them if
         # they start with the same string. not problematic, but not pretty
         stages = [i for i in subdirs(preprocessing_output_dir_this_task_train, join=True, sort=True)
-                  if i.split("/")[-1].find("stage") != -1]
+                  if i.split(os.path.sep)[-1].find("stage") != -1]
         for s in stages:
-            print(s.split("/")[-1])
+            print(s.split(os.path.sep)[-1])
             list_of_npz_files = subfiles(s, True, None, ".npz", True)
             list_of_pkl_files = [i[:-4]+".pkl" for i in list_of_npz_files]
             all_classes = []

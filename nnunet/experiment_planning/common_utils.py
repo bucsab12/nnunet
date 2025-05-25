@@ -14,6 +14,7 @@
 
 import numpy as np
 from copy import deepcopy
+import os
 from nnunet.network_architecture.generic_UNet import Generic_UNet
 import SimpleITK as sitk
 import shutil
@@ -23,7 +24,7 @@ from batchgenerators.utilities.file_and_folder_operations import join
 def split_4d_nifti(filename, output_folder, add_zeros=False):
     img_itk = sitk.ReadImage(filename)
     dim = img_itk.GetDimension()
-    file_base = filename.split("/")[-1]
+    file_base = filename.split(os.path.sep)[-1]
     if dim == 3:
         shutil.copy(filename, join(output_folder, file_base[:-7] + "_0000.nii.gz"))
         return

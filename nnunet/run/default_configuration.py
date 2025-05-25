@@ -26,7 +26,7 @@ def get_configuration_from_output_folder(folder):
     if folder.startswith("/"):
         folder = folder[1:]
 
-    configuration, task, trainer_and_plans_identifier = folder.split("/")
+    configuration, task, trainer_and_plans_identifier = folder.split(os.path.sep)
     trainer, plans_identifier = trainer_and_plans_identifier.split("__")
     return configuration, task, trainer, plans_identifier
 

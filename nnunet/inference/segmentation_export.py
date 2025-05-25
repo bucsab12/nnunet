@@ -175,7 +175,7 @@ def save_softmax_original_size(out_file_name, softmax_arr, bbox_dict=None, case_
     :param out_file_name: output file path of compressed nifti array
     :param softmax_arr: Softmax array with the original image size
     """
-    softmax_arr_new = np.copy(softmax_arr)
+    softmax_arr_new = np.copy(np.transpose(softmax_arr))
     if trim_softmax and bbox_dict is not None and case_index_dict is not None:
         case_name_list = basename(out_file_name).split('.')[0].split('_')
         file_index = int(case_name_list[-1])
